@@ -1,0 +1,20 @@
+/*
+ * hotspot.h — template kredensial WiFi
+ *
+ * Salin berkas ini menjadi hotspot.h, lalu isi sandi asli.
+ * Berkas hotspot.h masuk .gitignore dan tidak akan masuk repository.
+ *
+ *   cp firmware/esp32-gateway/hotspot.h.example firmware/esp32-gateway/hotspot.h
+ *
+ * Tanpa berkas ini, papan tetap menyala sebagai hotspot dan mencatat
+ * bingkai, hanya jalur uplink tidak tersambung (rtt,-1).
+ */
+#pragma once
+
+// Hotspot HP sumber internet (2,4 GHz)
+#define UPLINK_SSID "nama-hotspot-HP"
+#define UPLINK_PASS "sandi-hotspot-HP"
+
+// Hotspot yang dipancarkan ESP32 untuk perangkat uji
+#define AP_SSID "esp32-qos"
+#define AP_PASS "qos12345"

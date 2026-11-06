@@ -1,0 +1,38 @@
+# Data hasil pengukuran
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Berkas pendukung editor dan sistem
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Rahasia: sandi WiFi, broker, dan kredensial tidak boleh masuk repository
+.env
+secrets.h
+firmware/esp32-gateway/hotspot.h
+config.local.h
+
+# Keluaran grafik yang dibangkitkan (boleh dibuat ulang dengan --plot)
+docs/grafik/
+
+# hasil sesi penerima
+data/*.db
+data/*.db-journal
+
+# Hasil kompilasi Arduino (folder build/ dibuat otomatis oleh arduino-cli)
+build/
+firmware/*/build/
+
+# Kredensial lokal per Laptop
+rahasia*.h
+firmware/*/hotspot.h

@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pemantauan QoS — Gerbang ESP32</title>
+<style>
+  :root {
+    --latar: #f7f5f0;
+    --permukaan: #fffdf8;
+    --garis: #d9d3c6;
+    --garis-tipis: #e7e2d7;
+    --teks: #191713;
+    --teks-2: #6b6459;
+    --aksen: #0f5b47;
+    --turun: #23577f;
+    --naik: #0f5b47;
+    --rtt: #8a5a06;
+    --bahaya: #8f2b1e;
+    --peringatan: #8a5a06;
+    --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    background: var(--latar);
+    color: var(--teks);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .lembar {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 34px 44px 56px;
+    background: var(--permukaan);
+    border-left: 1px solid var(--garis-tipis);
+    border-right: 1px solid var(--garis-tipis);
+    min-height: 100vh;
+  }
+
+  /* ---------------------------------------------------------- kepala --- */
+  .kepala {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--teks);
+  }
+  .judul h1 {
+    font-family: var(--serif);
+    font-size: 27px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .judul p {
+    margin: 3px 0 0;
+    font-size: 12px;
+    color: var(--teks-2);
+  }
+  .alat {
+    display: flex;
+    align-items: flex-end;
+    gap: 18px;
+    text-align: right;
+  }
+  .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--teks-2);
+    line-height: 1.7;
+    font-variant-numeric: tabular-nums;
+  }
+  .meta b { color: var(--teks); font-weight: 500; }
+  .tombol {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--teks);
+    background: none;
+    border: 1px solid var(--garis);
+    border-radius: 0;
+    padding: 7px 12px;
+    font-family: var(--sans);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .tombol:hover { border-color: var(--teks); }
+  .tombol[data-aktif="0"] { color: var(--teks-2); }
+
+  /* ----------------------------------------------------------- pita --- */
+  .pita {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 9px 12px;
+    font-size: 12px;
+    border: 1px solid var(--garis);
+    border-left: 3px solid var(--peringatan);
+    background: #fdf8ec;
+    color: #4a3a12;
+  }
+  .pita.tampil { display: flex; }
+  .pita.bahaya { border-left-color: var(--bahaya); background: #fbf0ee; color: #55201a; }
+  .pita strong {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+
+  /* ---------------------------------------------------------- angka --- */
+  .angka {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-bottom: 1px solid var(--garis);
+  }
+  .sel {
+    padding: 18px 20px 16px;
+    border-left: 1px solid var(--garis-tipis);
+  }
+  .sel:first-child { border-left: 0; padding-left: 0; }
+  .label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--teks-2);
+    margin-bottom: 6px;
+  }
+  .nilai {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 38px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+  .nilai .satuan {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--teks-2);
+    margin-left: 5px;
+    font-weight: 400;
+  }
+  .nilai.turun { color: var(--turun); }
+  .nilai.naik { color: var(--naik); }
+  .nilai.bahaya { color: var(--bahaya); }
+  .sub {
+    margin-top: 7px;
+    font-size: 11px;
+    color: var(--teks-2);
+    font-variant-numeric: tabular-nums;
+  }
+
+
+  /* ------------------------------------------------- skema perangkat --- */
+  .papan {
+    border: 1px solid var(--garis-tipis);
+    background: var(--permukaan);
+    padding: 6px 10px 2px;
+    margin-top: 10px;
+  }
+  #skema { display: block; width: 100%; height: auto; }
+  #skema { width: 100%; height: auto; display: block; }
+  #skema .kabel { stroke: #cdc6b6; stroke-width: 1.2; fill: none; }
+  #skema .kabel.aktif { stroke: var(--turun); stroke-width: 1.6; }
+  #skema .kotak { fill: #fdfbf5; stroke: var(--teks); stroke-width: 1.3; }
+  #skema .papan-esp { fill: #f4f1e7; stroke: var(--teks); stroke-width: 1.4; }
+  #skema .pin { stroke: var(--teks); stroke-width: 1; }
+  #skema .t { font-family: var(--mono); font-size: 10px; fill: var(--teks); }
+  #skema .alas { paint-order: stroke; stroke: var(--kertas); stroke-width: 3px; }
+  #skema .t-kecil { font-family: var(--sans); font-size: 9px; letter-spacing: 0.06em; fill: var(--teks-2); text-transform: uppercase; }
+  #skema .t-nama { font-family: var(--sans); font-size: 11px; fill: var(--teks); }
+  #skema .lampu { fill: #c9c2b2; }
+  #skema .lampu.hidup { fill: var(--aksen); }
+  #skema .hp { fill: #fffdf8; stroke: #b9b2a2; stroke-width: 1.2; }
+  #skema .hp.aktif { stroke: var(--aksen); stroke-width: 1.8; }
+  #skema .layar { fill: #f2efe6; }
+  #skema .layar.aktif { fill: #e7f0ea; }
+
+  .kotak-animasi {
+    margin-top: 10px;
+    border: 1px solid var(--garis-tipis);
+    background: #fcfaf4;
+    padding: 4px;
+  }
+  #animasi { display: block; width: 100%; height: 190px; }
+
+  /* --------------------------------------------------------- grafik --- */
+  .bagian { padding-top: 26px; }
+  .kepala-bagian {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--garis-tipis);
+  }
+  .kepala-bagian h2 {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .kepala-bagian span {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--teks-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .legenda {
+    display: flex;
+    gap: 14px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--teks-2);
+    align-items: center;
+  }
+  .legenda i.titik { width: 7px; height: 7px; border-radius: 50%; }
+  .legenda i {
+    display: inline-block;
+    width: 9px;
+    height: 2px;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  canvas { display: block; width: 100%; }
+  #grafikLaju { height: 196px; margin-top: 10px; }
+  #grafikRtt { height: 118px; margin-top: 10px; }
+
+  /* --------------------------------------------------------- tabel ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    font-size: 10px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--teks-2);
+    font-weight: 500;
+    text-align: right;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--garis);
+    white-space: nowrap;
+  }
+  th.kiri { text-align: left; }
+  td {
+    padding: 11px 0;
+    border-bottom: 1px solid var(--garis-tipis);
+    text-align: right;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--teks);
+    vertical-align: middle;
+  }
+  td.kiri { text-align: left; font-family: var(--sans); }
+  .idl { display: flex; align-items: center; gap: 10px; }
+  .sinyal { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+  .sinyal i {
+    display: block;
+    width: 3px;
+    background: var(--teks);
+    opacity: 0.22;
+  }
+  .sinyal i.isi { opacity: 1; }
+  .sinyal.lemah i.isi { background: var(--peringatan); }
+  .mac { font-size: 12.5px; }
+  .ip { font-size: 11px; color: var(--teks-2); }
+  .domain {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    color: var(--teks-2);
+    max-width: 250px;
+    text-align: left;
+    line-height: 1.45;
+  }
+  .peringatan-teks { color: var(--peringatan); }
+  .bahaya-teks { color: var(--bahaya); }
+  .kosong td {
+    text-align: center;
+    padding: 34px 0;
+    color: var(--teks-2);
+    font-family: var(--sans);
+  }
+
+  /* ----------------------------------------------------- status kosong - */
+  .kosong-kotak {
+    margin-top: 26px;
+    padding: 34px 26px;
+    border: 1px dashed var(--garis);
+    background: #fbf9f4;
+  }
+  .kosong-kotak h3 {
+    font-family: var(--serif);
+    font-size: 16px;
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+  .kosong-kotak ol {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12.5px;
+    color: var(--teks-2);
+  }
+  .kosong-kotak li { margin-bottom: 3px; }
+  .kosong-kotak code {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: #f1ede3;
+    padding: 1px 5px;
+  }
+
+  /* --------------------------------------------------------- kaki ----- */
+  .kaki {
+    margin-top: 34px;
+    padding-top: 14px;
+    border-top: 1px solid var(--garis);
+    font-size: 11px;
+    color: var(--teks-2);
+    line-height: 1.65;
+  }
+  .kaki p { margin: 0 0 4px; }
+  .kaki .redup { color: #8b8478; }
+
+  .basi { opacity: 0.42; transition: opacity 120ms linear; }
+
+  @media (max-width: 900px) {
+    .lembar { padding: 24px 22px 40px; }
+    .kepala { flex-direction: column; align-items: flex-start; }
+    .alat { text-align: left; width: 100%; justify-content: space-between; }
+    .angka { grid-template-columns: 1fr 1fr; }
+    .sel:nth-child(3) { border-left: 0; padding-left: 0; }
+    .sel:nth-child(n+3) { border-top: 1px solid var(--garis-tipis); }
+    .nilai { font-size: 30px; }
+    .kolom-bingkai, .domain { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="lembar">
+
+  <header class="kepala">
+    <div class="judul">
+      <h1>Pemantauan QoS Gerbang ESP32</h1>
+      <p>MKKL1029 Wireless/Mobile Computing · Kelompok 1 · pemakaian empat perangkat</p>
+    </div>
+    <div class="alat">
+      <div class="meta">
+        sesi <b id="mSesi">—</b> · umur <b id="mUmur">—</b><br>
+        uplink <b id="mUplink">—</b> · <span id="mMode">menunggu</span>
+      </div>
+      <button class="tombol" id="btnJeda" type="button" data-aktif="1">Jeda</button>
+      <a class="tombol" href="/api/ekspor.csv" download="qos-sesi.csv">Unduh CSV</a>
+    </div>
+  </header>
+
+  <div class="pita" id="pitaSim"><strong>Simulasi</strong><span>angka tiruan dari simulator — jangan dipakai di laporan pengukuran</span></div>
+  <div class="pita bahaya" id="pitaMati"><strong>Penerima diam</strong><span id="teksMati">dashboard tidak menerima pembaruan</span></div>
+
+  <section class="angka">
+    <div class="sel">
+      <div class="label">Turun · detik ini</div>
+      <div class="nilai turun"><span id="kTurun">—</span><span class="satuan">kbps</span></div>
+      <div class="sub" id="sTurun">perangkat terbesar —</div>
+    </div>
+    <div class="sel">
+      <div class="label">Naik · detik ini</div>
+      <div class="nilai naik"><span id="kNaik">—</span><span class="satuan">kbps</span></div>
+      <div class="sub" id="sNaik">perangkat terbesar —</div>
+    </div>
+    <div class="sel">
+      <div class="label">Waktu sambung uplink</div>
+      <div class="nilai"><span id="kRtt">—</span><span class="satuan">ms</span></div>
+      <div class="sub" id="sRtt">rata-rata — · gagal —</div>
+    </div>
+    <div class="sel">
+      <div class="label">Perangkat</div>
+      <div class="nilai"><span id="kPerangkat">0</span><span class="satuan">aktif</span></div>
+      <div class="sub" id="sPerangkat">dari 0 klien menurut gerbang</div>
+    </div>
+  </section>
+
+
+  <section class="bagian">
+    <div class="kepala-bagian">
+      <h2>Perangkat tersambung</h2>
+      <span id="infoDiagram">gerbang dan klien · diperbarui tiap detik</span>
+    </div>
+    <div class="papan">
+      <svg id="skema" viewBox="0 0 1040 236" role="img"
+           aria-label="Skema sumber internet, gerbang ESP32, dan empat perangkat uji">
+        <!-- sumber internet -->
+        <g>
+          <rect class="kotak" x="30" y="78" width="150" height="80" rx="2"></rect>
+          <text class="t-kecil" x="46" y="100">sumber</text>
+          <text class="t-nama" x="46" y="122">Internet</text>
+          <text class="t" x="46" y="140">hotspot HP-1</text>
+          <circle class="lampu" id="lampuUplink" cx="168" cy="98" r="3.4"></circle>
+        </g>
+
+        <!-- kabel sumber ke gerbang -->
+        <path class="kabel" id="kabelUplink" d="M180 118 H300"></path>
+        <text class="t-kecil alas" x="196" y="109" id="tUplink">menunggu</text>
+
+        <!-- papan ESP32 -->
+        <g>
+          <rect class="papan-esp" x="300" y="56" width="160" height="124" rx="3"></rect>
+          <rect x="318" y="74" width="124" height="88" rx="2"
+                fill="none" stroke="#b9b2a2" stroke-width="1" stroke-dasharray="3 3"></rect>
+          <text class="t-kecil" x="318" y="48">gerbang</text>
+          <text class="t-nama" x="330" y="100">ESP32</text>
+          <text class="t" x="330" y="118" id="tKlien">0 klien</text>
+          <text class="t" x="330" y="134" id="tUplinkDb">uplink — dBm</text>
+          <circle class="lampu" id="lampuPapan" cx="436" cy="78" r="3.4"></circle>
+        </g>
+
+
+        <!-- perangkat, disusun skrip -->
+        <defs>
+          <marker id="ujung" viewBox="0 0 8 8" refX="7" refY="4"
+                  markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L8 4 L0 8 z" fill="#cdc6b6"></path>
+          </marker>
+        </defs>
+        <g id="deretHp"></g>
+      </svg>
+    </div>
+  </section>
+
+  <section class="bagian">
+    <div class="kepala-bagian">
+      <h2>Aliran data</h2>
+      <div class="legenda">
+        <span><i class="titik" style="background:var(--turun)"></i>turun</span>
+        <span><i class="titik" style="background:var(--naik)"></i>naik</span>
+        <span id="infoAnimasi">menunggu data</span>
+      </div>
+    </div>
+    <div class="kotak-animasi"><canvas id="animasi"></canvas></div>
+  </section>
+
+  <div class="kosong-kotak" id="kosongKotak">
+    <h3>Menunggu data dari gerbang</h3>
+    <ol>
+      <li>Jalankan <code>python3 src/penerima/penerima.py --port /dev/cu.usbserial-XXXX</code></li>
+      <li>Pastikan papan tersambung ke hotspot sumber — angka waktu sambung mulai terisi</li>
+      <li>Sambungkan telepon ke WiFi <code>esp32-qos</code>, lalu buka satu aplikasi di telepon</li>
+    </ol>
+  </div>
+
+  <section class="bagian">
+    <div class="kepala-bagian">
+      <h2>Laju data per detik</h2>
+      <div class="legenda">
+        <span><i style="background:var(--turun)"></i>turun</span>
+        <span><i style="background:var(--naik)"></i>naik</span>
+        <span id="infoTitik">0 titik</span>
+      </div>
+    </div>
+    <canvas id="grafikLaju"></canvas>
+  </section>
+
+  <section class="bagian">
+    <div class="kepala-bagian">
+      <h2>Waktu sambung uplink</h2>
+      <span id="infoRtt">diukur tiap 2 detik dari gerbang</span>
+    </div>
+    <canvas id="grafikRtt"></canvas>
+  </section>
+
+  <section class="bagian">
+    <div class="kepala-bagian">
+      <h2>Perangkat</h2>
+      <span id="infoUrut">diurutkan dari pemakaian terbesar</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="kiri">Perangkat</th>
+          <th>Turun kbps</th>
+          <th>Naik kbps</th>
+          <th class="kolom-bingkai">Bingkai</th>
+          <th style="padding-left:18px">Retry %</th>
+          <th class="kiri domain" style="padding-left:18px">Domain terakhir</th>
+        </tr>
+      </thead>
+      <tbody id="isiTabel">
+        <tr class="kosong"><td colspan="6">belum ada perangkat yang melapor</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="kaki">
+    <p>Angka byte dan bingkai dihitung dari bingkai 802.11 data yang tertangkap gerbang, jadi
+      beberapa persen lebih besar daripada hitungan di telepon. Retry adalah petunjuk packet
+      loss di radio, bukan jumlah paket hilang yang pasti.</p>
+    <p>Waktu sambung adalah lama <span style="font-family:var(--mono)">connect()</span> TCP gerbang
+      ke 1.1.1.1:53, bukan ICMP ping, dan hanya menunjukkan mutu jalur uplink.</p>
+    <p class="redup">Berkas sesi: <span style="font-family:var(--mono)">data/qos.db</span> ·
+      keluaran CSV mengikuti sesi berjalan · dashboard v1.0 (tema terang)</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  const el = id => document.getElementById(id);
+  const SERI = 180;
+  let jeda = false;
+  let jsonTerakhir = null;
+  let waktuTerakhir = 0;
+  let terlihat = new Map();       // mac -> {data, waktu} untuk baris yang bertahan 30 dtk (FR-19)
+  let macTerakhir = [];
+
+  const angka = (v, desimal = 1) =>
+    Number(v).toLocaleString('id-ID', { minimumFractionDigits: desimal, maximumFractionDigits: desimal });
+
+  const rupiah = v => angka(v, v >= 100 ? 0 : 1);
+
+  function jamDari(detik) {
+    if (!jsonTerakhir || !jsonTerakhir.mulai) return '';
+    const mulai = new Date(jsonTerakhir.mulai).getTime();
+    const d = new Date(mulai + detik * 1000);
+    return String(d.getHours()).padStart(2, '0') + ':'
+      + String(d.getMinutes()).padStart(2, '0') + ':'
+      + String(d.getSeconds()).padStart(2, '0');
+  }
+
+  function umur(detik) {
+    const m = Math.floor(detik / 60), s = Math.floor(detik % 60);
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function sinyal(rssi) {
+    // -50 kuat, -90 lemah
+    const tingkat = rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
+    const batang = [4, 7, 10, 12].map((h, i) =>
+      `<i class="${i < tingkat ? 'isi' : ''}" style="height:${h}px"></i>`).join('');
+    return `<span class="sinyal ${rssi <= -75 ? 'lemah' : ''}" title="${rssi} dBm">${batang}</span>`;
+  }
+
+  /* ------------------------------------------------------------ grafik */
+  function siapkan(canvas) {
+    const r = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(r.width * dpr)) {
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, r.width, r.height);
+    return { ctx, w: r.width, h: r.height };
+  }
+
+  function langkahRapi(kasar) {
+    if (kasar <= 0) return 1;
+    const pangkat = Math.pow(10, Math.floor(Math.log10(kasar)));
+    const sisa = kasar / pangkat;
+    const pilih = sisa <= 1 ? 1 : sisa <= 1.5 ? 1.5 : sisa <= 2 ? 2 : sisa <= 2.5 ? 2.5
+      : sisa <= 3 ? 3 : sisa <= 4 ? 4 : sisa <= 5 ? 5 : sisa <= 6 ? 6 : sisa <= 8 ? 8 : 10;
+    return pilih * pangkat;
+  }
+
+  function sumbu(ctx, w, h, pad, maksMasuk, satuan, warnaGaris) {
+    const langkah = langkahRapi(maksMasuk / 3);
+    const maks = langkah * 3;
+    ctx.strokeStyle = warnaGaris;
+    ctx.lineWidth = 1;
+    ctx.font = '10px "SF Mono", ui-monospace, Menlo, monospace';
+    ctx.fillStyle = '#6b6459';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i <= 3; i++) {
+      const y = pad.atas + (h - pad.atas - pad.bawah) * (i / 3);
+      ctx.beginPath();
+      ctx.moveTo(pad.kiri, Math.round(y) + 0.5);
+      ctx.lineTo(w - pad.kanan, Math.round(y) + 0.5);
+      ctx.stroke();
+      const v = maks * (1 - i / 3);
+      const teks = i === 0 ? `${angka(v, 0)} ${satuan}` : angka(v, 0);
+      ctx.fillText(teks, pad.kiri - 7, y);
+    }
+    return maks;
+  }
+
+  function gambarLaju() {
+    const c = el('grafikLaju');
+    const { ctx, w, h } = siapkan(c);
+    const pad = { kiri: 78, kanan: 8, atas: 18, bawah: 16 };
+    const data = (jsonTerakhir && jsonTerakhir.histori) || [];
+    const maksData = Math.max(1, ...data.map(d => Math.max(d.naik, d.turun)));
+    const maks = Math.max(50, Math.ceil(maksData / 50) * 50);
+    const maksTerpakai = sumbu(ctx, w, h, pad, maks, 'kbps', '#e7e2d7');
+
+    if (data.length < 2) return;
+    const x = i => pad.kiri + (w - pad.kiri - pad.kanan) * (i / (data.length - 1));
+    const y = v => pad.atas + (h - pad.atas - pad.bawah) * (1 - v / maksTerpakai);
+    const awal = 0;
+
+    // isi lembut untuk turun
+    ctx.beginPath();
+    data.forEach((d, i) => {
+      const px = x(awal + i), py = y(d.turun);
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    });
+    ctx.lineTo(x(awal + data.length - 1), y(0));
+    ctx.lineTo(x(awal), y(0));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(35,87,127,0.07)';
+    ctx.fill();
+
+    const garis = (kunci, warna) => {
+      ctx.beginPath();
+      data.forEach((d, i) => {
+        const px = x(awal + i), py = y(d[kunci]);
+        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      });
+      ctx.strokeStyle = warna;
+      ctx.lineWidth = 1.6;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    };
+    garis('turun', '#23577f');
+    garis('naik', '#0f5b47');
+
+    // label waktu
+    ctx.fillStyle = '#8b8478';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const tanda = 2;
+    for (let i = 0; i <= tanda; i++) {
+      const idx = Math.round((data.length - 1) * (i / tanda));
+      const d = data[idx];
+      if (!d) continue;
+      ctx.textAlign = i === 0 ? 'left' : i === tanda ? 'right' : 'center';
+      ctx.fillText(jamDari(d.t), x(awal + idx), h - pad.bawah + 4);
+    }
+  }
+
+  function gambarRtt() {
+    const c = el('grafikRtt');
+    const { ctx, w, h } = siapkan(c);
+    const pad = { kiri: 78, kanan: 8, atas: 14, bawah: 16 };
+    const data = (jsonTerakhir && jsonTerakhir.histori) || [];
+    const nilai = data.map(d => d.rtt).filter(v => v > 0);
+    const maksData = Math.max(1, ...nilai);
+    const maks = Math.max(60, Math.ceil(maksData / 20) * 20);
+    const maksTerpakai = sumbu(ctx, w, h, pad, maks, 'ms', '#e7e2d7');
+    if (data.length < 2) return;
+
+    const x = i => pad.kiri + (w - pad.kiri - pad.kanan) * (i / (data.length - 1));
+    const y = v => pad.atas + (h - pad.atas - pad.bawah) * (1 - v / maksTerpakai);
+    const awal = 0;
+
+    ctx.beginPath();
+    let mulai = false;
+    data.forEach((d, i) => {
+      if (!d.rtt) { mulai = false; return; }
+      const px = x(awal + i), py = y(d.rtt);
+      mulai ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      mulai = true;
+    });
+    ctx.strokeStyle = '#8a5a06';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+
+    const akhir = data[data.length - 1];
+    if (akhir && akhir.rtt) {
+      const px = x(awal + data.length - 1), py = y(akhir.rtt);
+      ctx.beginPath();
+      ctx.arc(px, py, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = '#8a5a06';
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#8b8478';
+    ctx.textBaseline = 'top';
+    [0, data.length - 1].forEach((idx, i) => {
+      const d = data[idx];
+      if (!d) return;
+      ctx.textAlign = i === 0 ? 'left' : 'right';
+      ctx.fillText(jamDari(d.t), x(awal + idx), h - pad.bawah + 4);
+    });
+  }
+
+
+  /* ------------------------------------------------- skema perangkat --- */
+  const NS = 'http://www.w3.org/2000/svg';
+  // tata letak lebar: empat HP berjajar, label di bawah ikon
+  // tata letak sempit: empat HP bertumpuk, label di samping ikon
+  function tata(lebar) {
+    if (lebar >= 1000) {
+      const xs = [560, 700, 840, 980];
+      return {
+        vb: '0 0 1100 236', xs, ys: [70, 70, 70, 70], w: 58, h: 96,
+        labelSamping: false, busX: null,
+        port: [92, 106, 130, 144],
+      };
+    }
+    const ys = [24, 136, 248, 360];
+    return {
+      vb: '0 0 1040 460', xs: [700, 700, 700, 700], ys, w: 58, h: 76,
+      labelSamping: true, busX: 520,
+      port: [ys[0] + 38, ys[1] + 38, ys[2] + 38, ys[3] + 38],
+    };
+  }
+
+  let tataKini = null;
+
+  function buatDeret(Y) {
+    const deret = el('deretHp');
+    deret.replaceChildren();
+    const sebelum = el('skema');
+    const hpGrup = [];
+    const kabelGrup = [];
+    HP_X_FOR(Y).forEach((x, i) => {
+      const y = Y.ys[i];
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('id', 'hp' + i);
+
+      const kabel = document.createElementNS(NS, 'path');
+      kabel.setAttribute('class', 'kabel');
+      kabel.setAttribute('id', 'kabel' + i);
+      kabel.setAttribute('marker-end', 'url(#ujung)');
+      kabel.setAttribute('d', Y.busX
+        ? `M460 118 H${Y.busX} V${Y.ys[i] + 38} H${x - 6}`
+        : `M460 ${Y.port[i]} L${x - 6} ${y + Y.h / 2}`);
+      kabelGrup.push(kabel);
+
+      const badan = document.createElementNS(NS, 'rect');
+      badan.setAttribute('class', 'hp');
+      badan.setAttribute('x', x); badan.setAttribute('y', y);
+      badan.setAttribute('width', Y.w); badan.setAttribute('height', Y.h);
+      badan.setAttribute('rx', 6);
+
+      const layar = document.createElementNS(NS, 'rect');
+      layar.setAttribute('class', 'layar');
+      layar.setAttribute('x', x + 5); layar.setAttribute('y', y + 8);
+      layar.setAttribute('width', Y.w - 10); layar.setAttribute('height', Y.h - 22);
+      layar.setAttribute('rx', 2);
+
+      const batang = document.createElementNS(NS, 'g');
+      [0, 1, 2, 3].forEach(b => {
+        const r = document.createElementNS(NS, 'rect');
+        r.setAttribute('x', x + 10 + b * 5);
+        r.setAttribute('y', y + 58 - b * 4);
+        r.setAttribute('width', 3); r.setAttribute('height', 6 + b * 4);
+        r.setAttribute('fill', '#b9b2a2'); r.setAttribute('class', 'bar');
+        batang.appendChild(r);
+      });
+
+      const tx = Y.labelSamping ? x + Y.w + 12 : x + Y.w / 2;
+      const anchor = Y.labelSamping ? 'start' : 'middle';
+      const ty = Y.labelSamping ? [y + 26, y + 44, y + 60] : [y + 112, y + 126, y + 140];
+
+      const nama = document.createElementNS(NS, 'text');
+      nama.setAttribute('class', 't'); nama.setAttribute('x', tx);
+      nama.setAttribute('y', ty[0]); nama.setAttribute('text-anchor', anchor);
+      nama.textContent = '—';
+
+      const laju = document.createElementNS(NS, 'text');
+      laju.setAttribute('class', 't'); laju.setAttribute('x', tx);
+      laju.setAttribute('y', ty[1]); laju.setAttribute('text-anchor', anchor);
+      laju.setAttribute('fill', '#6b6459'); laju.textContent = 'kosong';
+
+      const namaKecil = document.createElementNS(NS, 'text');
+      namaKecil.setAttribute('class', 't'); namaKecil.setAttribute('x', tx);
+      namaKecil.setAttribute('y', ty[2]); namaKecil.setAttribute('text-anchor', anchor);
+      namaKecil.setAttribute('fill', '#8b8478'); namaKecil.textContent = '';
+
+      g.append(badan, layar, batang, nama, laju, namaKecil);
+      hpGrup.push(g);
+    });
+    kabelGrup.forEach(k => deret.appendChild(k));
+    hpGrup.forEach(g => deret.appendChild(g));
+    sebelum.setAttribute('viewBox', Y.vb);
+  }
+
+  function HP_X_FOR(Y) { return Y.xs; }
+
+  function pasangSkema() {
+    const lebar = Math.round(el('skema').getBoundingClientRect().width);
+    const kunci = lebar >= 1000 ? 'lebar' : 'sempit';
+    if (kunci === tataKini) return;
+    tataKini = kunci;
+    buatDeret(tata(lebar));
+    if (jsonTerakhir) gambarSkema(jsonTerakhir.perangkat || [], jsonTerakhir);
+  }
+
+  let jedaUkur = 0;
+  addEventListener('resize', () => {
+    clearTimeout(jedaUkur);
+    jedaUkur = setTimeout(pasangSkema, 150);
+  });
+
+  function gambarSkema(perangkat, d) {
+    const urut = perangkat.slice(0, 4);
+    const aktif = urut.filter(p => p.turun_kbps + p.naik_kbps > 0).length;
+
+    el('tKlien').textContent = `${d.klien ?? 0} klien`;
+    el('tUplinkDb').textContent = d.rssi_uplink ? `uplink ${d.rssi_uplink} dBm` : 'uplink — dBm';
+    el('tUplink').textContent = d.rssi_uplink ? 'jalur hidup' : 'menunggu uplink';
+    el('kabelUplink').classList.toggle('aktif', !!d.rssi_uplink);
+    el('lampuUplink').classList.toggle('hidup', !!d.rssi_uplink);
+    el('lampuPapan').classList.toggle('hidup', aktif > 0);
+    el('infoDiagram').textContent = `${aktif} dari 4 slot terisi · urut pemakaian, bukan nomor IP`;
+
+    [0, 1, 2, 3].forEach(i => {
+      const g = el('hp' + i);
+      const p = urut[i];
+      const kabel = el('kabel' + i);
+      const hidup = p && (p.turun_kbps + p.naik_kbps) > 0;
+      kabel.classList.toggle('aktif', !!hidup);
+      g.querySelector('.hp').classList.toggle('aktif', !!hidup);
+      g.querySelector('.layar').classList.toggle('aktif', !!hidup);
+
+      const bar = g.querySelectorAll('.bar');
+      const tingkat = p ? (p.rssi >= -55 ? 4 : p.rssi >= -65 ? 3 : p.rssi >= -70 ? 2 : 1) : 0;
+      bar.forEach((r, b) => {
+        r.setAttribute('fill', b < tingkat ? (p && p.rssi <= -70 ? '#8a5a06' : '#191713') : '#cfc8b8');
+      });
+
+      const teks = g.querySelectorAll('text');
+      if (p) {
+        teks[0].textContent = p.mac;
+        teks[1].textContent = `${rupiah(p.turun_kbps)} kbps`;
+        teks[2].textContent = `${p.rssi} dBm${p.rssi <= -70 ? ' · lemah' : ''}`;
+      } else {
+        teks[0].textContent = '—';
+        teks[1].textContent = 'kosong';
+        teks[2].textContent = '';
+      }
+    });
+  }
+
+  /* ------------------------------------------------- kotak animasi ----- */
+  const titik = [];          // {x, y, arah, warna, v}
+  let akum = [0, 0, 0, 0];   // penumpuk pembentukan titik per perangkat
+  let terakhirGambar = 0;
+  let bingkai = 0;
+
+  function ukurAnimasi(canvas) {
+    const r = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(r.width * dpr) || canvas.height !== Math.round(r.height * dpr)) {
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w: r.width, h: r.height };
+  }
+
+  function gambarAnimasi(waktu) {
+    const canvas = el('animasi');
+    const { ctx, w, h } = ukurAnimasi(canvas);
+    const dt = terakhirGambar ? Math.min((waktu - terakhirGambar) / 1000, 0.1) : 0;
+    terakhirGambar = waktu;
+    bingkai++;
+
+    ctx.clearRect(0, 0, w, h);
+    const data = (jsonTerakhir && jsonTerakhir.perangkat) || [];
+    const urut = data.slice(0, 4);
+    const kiri = 74, kanan = w - 100;
+    const tengah = (kiri + kanan) / 2;
+
+    ctx.font = '10px "SF Mono", ui-monospace, Menlo, monospace';
+    ctx.textBaseline = 'middle';
+
+    // kolom kiri/kanan dan pembatas gerbang
+    ctx.strokeStyle = '#e2dccd';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(tengah) + 0.5, 22);
+    ctx.lineTo(Math.round(tengah) + 0.5, h - 22);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8b8478';
+    ctx.textAlign = 'left';
+    ctx.fillText('internet', 6, 12);
+    ctx.textAlign = 'center';
+    ctx.fillText('gerbang', tengah, 12);
+    ctx.textAlign = 'right';
+    ctx.fillText('perangkat', w - 6, 12);
+
+    const tinggiBaris = Math.min(38, (h - 40) / 4);
+    let bergerak = false;
+
+    // kalau JSON tidak mengirim perangkat, tetap gambar empat jalur kosong
+    for (let i = 0; i < 4; i++) {
+      const p = urut[i];
+      const y = 30 + i * tinggiBaris + tinggiBaris / 2;
+      const naik = p ? p.naik_kbps : 0;
+      const turun = p ? p.turun_kbps : 0;
+      const adaData = naik + turun > 0;
+
+      ctx.strokeStyle = '#ddd6c6';
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(kiri, y + 0.5);
+      ctx.lineTo(kanan, y + 0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = p ? '#191713' : '#b3ab9b';
+      ctx.fillText(p ? p.mac.split(':').slice(-3).join(':') : '—', kiri - 8, y);
+
+      if (p && adaData) {
+        bergerak = true;
+        const dalam = Math.max(0.35, Math.min(1, (naik + turun) / 900));
+        const laju = 90 + Math.min(260, (naik + turun) * 0.18);
+        const perDetikNaik = Math.min(8, naik / 140);
+        const perDetikTurun = Math.min(10, turun / 140);
+
+        if (dt > 0) akum[i] += (perDetikNaik + perDetikTurun) * dt;
+        let lahir = 0;
+        while (akum[i] >= 1 && lahir < 8) {
+          akum[i] -= 1;
+          lahir++;
+          const keAtas = Math.random() < (naik / (naik + turun));
+          titik.push({
+            x: keAtas ? kanan : kiri,
+            y: y + (Math.random() * 6 - 3),
+            arah: keAtas ? -1 : 1,
+            warna: keAtas ? '15,91,71' : '35,87,127',
+            v: laju * (0.75 + Math.random() * 0.5),
+            alfa: dalam,
+          });
+        }
+      } else {
+        akum[i] = 0;
+      }
+    }
+
+    const batasKiri = kiri, batasKanan = kanan;
+    for (let i = titik.length - 1; i >= 0; i--) {
+      const t = titik[i];
+      t.x += t.arah * t.v * dt;
+      if (t.x < batasKiri - 6 || t.x > batasKanan + 6) { titik.splice(i, 1); continue; }
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, 2.1, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${t.warna},${0.22 + 0.5 * t.alfa})`;
+      ctx.fill();
+    }
+    if (titik.length > 220) titik.splice(0, titik.length - 220);
+
+    el('infoAnimasi').textContent = bergerak
+      ? `${titik.length} titik bergerak · satu titik mewakili paket`
+      : 'menunggu data dari perangkat';
+  }
+
+  window.__animasi = () => ({
+    bingkai: bingkai,
+    jumlah: titik.length,
+    kiri: titik.length ? Math.round(Math.min(...titik.map(t => t.x))) : 0,
+    kanan: titik.length ? Math.round(Math.max(...titik.map(t => t.x))) : 0,
+  });
+
+
+  /* ------------------------------------------------------------- tabel */
+  function gambarTabel(perangkat, kini) {
+    const tbody = el('isiTabel');
+    if (!perangkat.length) {
+      tbody.innerHTML = `<tr class="kosong"><td colspan="6">belum ada perangkat yang melapor — sambungkan telepon ke hotspot gerbang</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = perangkat.map(d => {
+      const retryTinggi = d.ulang_persen > 10;
+      const domain = (d.dns && d.dns.length)
+        ? d.dns.slice(0, 6).join(' · ')
+        : '—';
+      const rekam = terlihat.get(d.mac);
+      const basi = rekam && (kini - rekam.waktu) > 6000 ? ' basi' : '';
+      return `<tr class="${basi.trim()}">
+        <td class="kiri">
+          <div class="idl">
+            ${sinyal(d.rssi)}
+            <div>
+              <div class="mac">${d.mac}</div>
+              <div class="ip">${d.ip} · ${d.rssi} dBm${d.rssi <= -70 ? ' · lemah' : ''}</div>
+            </div>
+          </div>
+        </td>
+        <td>${rupiah(d.turun_kbps)}</td>
+        <td>${rupiah(d.naik_kbps)}</td>
+        <td class="kolom-bingkai">${d.bingkai}</td>
+        <td style="padding-left:18px" class="${retryTinggi ? 'peringatan-teks' : ''}">${angka(d.ulang_persen, 1)} %</td>
+        <td class="kiri domain" style="padding-left:18px">${domain}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  /* -------------------------------------------------------------- render */
+  function render(d, waktu) {
+    jsonTerakhir = d;
+    waktuTerakhir = waktu;
+
+    // simpan salinan terakhir tiap perangkat; baris bertahan 30 detik setelah berhenti melapor
+    (d.perangkat || []).forEach(p => terlihat.set(p.mac, { data: p, waktu }));
+    const perangkat = [...terlihat.values()]
+      .filter(v => waktu - v.waktu <= 30000)
+      .map(v => v.data)
+      .sort((a, b) => (b.turun_kbps + b.naik_kbps) - (a.turun_kbps + a.naik_kbps));
+
+    const aktif = perangkat.length;
+    el('mSesi').textContent = d.sesi ?? '—';
+    el('mUmur').textContent = umur(d.detik || 0);
+    el('mUplink').textContent = (d.rssi_uplink ? d.rssi_uplink + ' dBm' : '—');
+    el('mMode').textContent = d.mode === 'sim' ? 'SIMULASI' : 'LANGSUNG';
+
+    el('pitaSim').classList.toggle('tampil', d.mode === 'sim');
+    el('pitaMati').classList.remove('tampil');
+
+    const turun = perangkat.reduce((a, p) => a + Math.round(p.turun_kbps), 0);
+    const naik = perangkat.reduce((a, p) => a + Math.round(p.naik_kbps), 0);
+    const maksTurun = Math.max(0, ...perangkat.map(p => p.turun_kbps));
+    const maksNaik = Math.max(0, ...perangkat.map(p => p.naik_kbps));
+
+    el('kTurun').textContent = rupiah(turun);
+    el('kNaik').textContent = rupiah(naik);
+    el('sTurun').textContent = perangkat.length ? `perangkat terbesar ${rupiah(maksTurun)} kbps` : 'menunggu data';
+    el('sNaik').textContent = perangkat.length ? `perangkat terbesar ${rupiah(maksNaik)} kbps` : 'menunggu data';
+
+    const r = d.rtt || {};
+    el('kRtt').textContent = r.sekarang ? Math.round(r.sekarang) : '—';
+    const gagal = r.gagal || 0;
+    el('sRtt').innerHTML = r.sekarang
+      ? `terakhir diukur · rata-rata ${angka(r.rata2, 1)} · min ${Math.round(r.min)} · maks ${Math.round(r.maks)}`
+        + (gagal ? ` · <span class="bahaya-teks">gagal ${gagal}</span>` : '')
+      : (gagal ? '<span class="bahaya-teks">gerbang belum dapat uplink</span>' : 'belum ada sambungan uplink');
+
+    el('kPerangkat').textContent = aktif;
+    el('sPerangkat').textContent = `dari ${d.klien ?? 0} klien menurut gerbang`;
+
+    el('kosongKotak').style.display = (perangkat.length || (d.histori || []).length) ? 'none' : 'block';
+    const sejarah = d.histori || [];
+    const titik = sejarah.length;
+    el('infoTitik').textContent = `${titik} titik · maksimum 180`;
+
+    gambarSkema(perangkat, d);
+    gambarTabel(perangkat, waktu);
+    gambarLaju();
+    gambarRtt();
+  }
+
+  function tandaiMati(pesan) {
+    el('pitaMati').classList.add('tampil');
+    el('teksMati').textContent = pesan;
+    document.querySelector('.angka').classList.add('basi');
+    document.querySelectorAll('.bagian').forEach(n => n.classList.add('basi'));
+  }
+
+  async function putar() {
+    if (jeda) return;
+    try {
+      const jawab = await fetch('/api/state', { cache: 'no-store' });
+      if (!jawab.ok) throw new Error('kode ' + jawab.status);
+      render(await jawab.json(), Date.now());
+    } catch (e) {
+      if (waktuTerakhir) {
+        const lewat = Math.round((Date.now() - waktuTerakhir) / 1000);
+        tandaiMati(`penerima tidak menjawab ${lewat} detik — angka terakhir ${new Date(waktuTerakhir).toLocaleTimeString('id-ID')}`);
+      } else {
+        tandaiMati('penerima tidak menjawab — jalankan penerima lalu muat ulang');
+      }
+    }
+  }
+
+  el('btnJeda').addEventListener('click', () => {
+    jeda = !jeda;
+    el('btnJeda').textContent = jeda ? 'Lanjut' : 'Jeda';
+    el('btnJeda').dataset.aktif = jeda ? '0' : '1';
+  });
+
+  window.addEventListener('resize', () => {
+    if (jsonTerakhir) { gambarLaju(); gambarRtt(); }
+  });
+
+  pasangSkema();
+  putar();
+  setInterval(putar, 1000);
+
+  const kurangiGerak = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  setInterval(() => gambarAnimasi(performance.now()), kurangiGerak ? 500 : 60);
+  pasangSkema();
+})();
+</script>
+</body>
+</html>
